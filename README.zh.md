@@ -12,10 +12,11 @@
 [![Platform](https://img.shields.io/badge/platform-Linux-brightgreen.svg)](https://www.kernel.org/)
 [![Language](https://img.shields.io/badge/language-C11-orange.svg)](https://en.cppreference.com/wiki/c/help/idx/intro)
 [![CPU](https://img.shields.io/badge/CPU-Intel%20Core%20Ultra-blueviolet)](https://www.intel.com/)
-
+[English](./README.md) | [中文](./README.zh.md)
 </div>
 
 ---
+
 
 ## 功能特性
 
