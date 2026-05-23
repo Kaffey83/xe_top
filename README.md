@@ -2,11 +2,11 @@
 
 <div align="center">
 
-**Intel Core Ultra 平台全栈性能监控工具**
+**Intel Core Ultra Full-Stack Performance Monitoring Tool**
 
-实时监控 GPU · CPU · 内存(带宽+容量) · 功耗(RAPL) · 电池 · 磁盘 · 网络 · NPU
+Real-time monitoring of GPU · CPU · Memory(Bandwidth+Capacity) · Power(RAPL) · Battery · Disk · Network · NPU
 
-类似 `top` 的全屏终端 UI，数据源自 Linux PMU / sysfs，与 Ubuntu 系统监视器逻辑一致
+Full-screen terminal UI similar to `top`, data from Linux PMU / sysfs, consistent with Ubuntu System Monitor logic
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux-brightgreen.svg)](https://www.kernel.org/)
@@ -17,300 +17,266 @@
 
 ---
 
-## 功能特性
+## Features
 
-| 监控模块 | 数据来源 | 指标详情 |
-|---------|---------|---------|
-| **Xe GPU** | 内核 PMU 驱动 | 渲染引擎占用 (%), 视频引擎占用 (%), 实际频率 (MHz), 显存占用 (MiB) |
-| **CPU** | 硬件性能计数器 | P-Core / E-Core 实际频率 (MHz), IPC, 缓存未命中率 (%), 分支预测未命中率 (%), C6/C10 深度睡眠占比 (%), 热裕度 (°C) |
-| **内存带宽** | Uncore IMC 计数器 | 读/写带宽 (MiB/s, GB/s) |
-| **内存容量** | `/proc/meminfo` | 总量 / 已用 / 可用 (GiB), 使用率 (%), 基于 MemAvailable（含可回收缓存，与系统监视器一致） |
-| **RAPL 功耗** | 内核 MSR/sysfs | Package / Core / DRAM 功耗 (W) |
-| **电池** | ACPI sysfs | 充放状态, 剩余电量 (%), 瞬时功率 (W) |
-| **磁盘 IO** | `/sys/block` | 读/写速率 (MiB/s) |
-| **网络 IO** | `/sys/class/net` | 下载/上传速率 (MiB/s) |
-| **NPU (AI 引擎)** | sysfs 设备节点 | 利用率 (%), 实际/最大频率 (MHz), 显存占用 (MiB) |
+| Module | Data Source | Metrics |
+|--------|-------------|---------|
+| **Xe GPU** | Kernel PMU driver | Render engine utilization (%), Video engine utilization (%), Actual frequency (MHz), VRAM usage (MiB) |
+| **CPU** | Hardware performance counters | P-Core / E-Core actual frequency (MHz), IPC, Cache miss rate (%), Branch miss rate (%), C6/C10 deep sleep percentage (%), Thermal margin (°C) |
+| **Memory Bandwidth** | Uncore IMC counters | Read/Write bandwidth (MiB/s, GB/s) |
+| **Memory Capacity** | `/proc/meminfo` | Total / Used / Available (GiB), Usage (%), based on MemAvailable (includes reclaimable cache, consistent with System Monitor) |
+| **RAPL Power** | Kernel MSR/sysfs | Package / Core / DRAM power (W) |
+| **Battery** | ACPI sysfs | Charge/discharge status, Remaining capacity (%), Instantaneous power (W) |
+| **Disk I/O** | `/sys/block` | Read/Write rate (MiB/s) |
+| **Network I/O** | `/sys/class/net` | Download/Upload rate (MiB/s) |
+| **NPU (AI Engine)** | sysfs device nodes | Utilization (%), Actual/Max frequency (MHz), Memory usage (MiB) |
 
-## 系统要求
+## System Requirements
 
-| 项目 | 要求 |
-|------|------|
-| **CPU** | Intel Core Ultra (200V / 200H / 200U 系列) |
-| **操作系统** | Linux 内核 ≥ 6.8（推荐） |
-| **权限** | 部分指标需 `root` 权限（RAPL 功耗、PMU 计数器） |
-| **依赖** | `cmake`, `gcc`/`clang`, `make`, librt, libm（系统标准库） |
+| Item | Requirement |
+|------|-------------|
+| **CPU** | Intel Core Ultra (200V / 200H / 200U series) |
+| **OS** | Linux kernel ≥ 6.8 (recommended) |
+| **Permissions** | Some metrics require `root` (RAPL power, PMU counters) |
+| **Dependencies** | `cmake`, `gcc`/`clang`, `make`, librt, libm (system standard libraries) |
 
-## 快速开始
+## Quick Start
 
-### 编译
+### Build
 
 ```bash
-# 使用项目脚本（推荐）
+# Using project script (recommended)
 chmod +x make.sh
 ./make.sh
 
-# 或使用 CMake 手动编译
+# Or build manually with CMake
 cmake -B build && cmake --build build
 ```
 
-编译产物位于 `build/xe_top`。
+Build output is located at `build/xe_top`.
 
-### 运行
+### Run
 
 ```bash
-# 完整监控（推荐 sudo，部分功能需 root）
+# Full monitoring (sudo recommended, some features require root)
 sudo ./build/xe_top
 
-# 自定义刷新间隔（2 秒）
+# Custom refresh interval (2 seconds)
 sudo ./build/xe_top -i 2
 
-# 禁用特定模块
+# Disable specific modules
 sudo ./build/xe_top --no-gpu --no-cpu --no-power
 
-# 仅监控 CPU + GPU（无需 root）
+# Monitor only CPU + GPU (no root required)
 ./build/xe_top --no-power --no-battery --no-disk --no-net
 
-# 查看帮助
+# Show help
 ./build/xe_top -h
 ```
 
-### 快捷键
+### Keyboard Shortcuts
 
-| 按键 | 功能 |
-|------|------|
-| `Ctrl+C` | 退出程序（通过信号处理 + 非阻塞 stdin 读丢弃） |
+| Key | Function |
+|-----|----------|
+| `Ctrl+C` | Exit program (via signal handling + non-blocking stdin read) |
 
-## 命令行选项
-
-```
-用法: ./xe_top [选项]
-
-选项:
-  -i, --interval <秒>  刷新间隔 (默认: 1，支持亚秒级，最小值 0.1)
-  -G, --no-gpu         禁用 GPU 监控
-  -C, --no-cpu         禁用 CPU 监控
-  -P, --no-power       禁用功耗监控
-  -M, --no-memory      禁用内存监控（带宽 + 容量）
-  -B, --no-battery     禁用电池监控
-  -D, --no-disk        禁用磁盘监控
-  -N, --no-net         禁用网络监控
-  -A, --no-npu         禁用 NPU 监控
-  -h, --help           显示此帮助信息
-```
-
-## 项目结构
+## Command-Line Options
 
 ```
-├── CMakeLists.txt              # CMake 构建配置 (C11, -Wall -Werror)
-├── make.sh                     # 快速编译脚本（自动检测依赖、颜色输出）
-├── README.md                   # 项目文档
+Usage: ./xe_top [OPTIONS]
+
+Options:
+  -i, --interval <sec>  Refresh interval (default: 1, supports sub-second, minimum 0.1)
+  -G, --no-gpu         Disable GPU monitoring
+  -C, --no-cpu         Disable CPU monitoring
+  -P, --no-power       Disable power monitoring
+  -M, --no-memory      Disable memory monitoring (bandwidth + capacity)
+  -B, --no-battery     Disable battery monitoring
+  -D, --no-disk        Disable disk monitoring
+  -N, --no-net         Disable network monitoring
+  -A, --no-npu         Disable NPU monitoring
+  -h, --help           Display this help message
+```
+
+## Project Structure
+
+```
+├── CMakeLists.txt              # CMake build configuration (C11, -Wall -Werror)
+├── make.sh                     # Quick build script (auto-detects dependencies, colored output)
+├── README.md                   # Project documentation
 ├── src/
-│   ├── main.c                  # 程序入口与主循环（信号处理 + 非阻塞 stdin）
+│   ├── main.c                  # Program entry and main loop (signal handling + non-blocking stdin)
 │   ├── config/
-│   │   ├── config.h            # 运行时配置结构体（各模块启用开关、间隔）
-│   │   └── config.c            # getopt_long 命令行参数解析（支持亚秒级间隔）
+│   │   ├── config.h            # Runtime configuration structure (module enable flags, interval)
+│   │   └── config.c            # getopt_long command-line argument parsing (supports sub-second interval)
 │   ├── monitor/
-│   │   ├── gpu_monitor.c/h     # Xe GPU PMU 监控（动态查找 xe_ PMU 设备）
-│   │   ├── cpu_monitor.c/h     # CPU PMU 监控 (P-Core / E-Core 分别计数)
-│   │   ├── mem_monitor.c/h     # 内存带宽 (IMC 计数器) + 容量 (/proc/meminfo)
-│   │   ├── power_monitor.c/h   # RAPL 功耗监控 (Package / Core / DRAM)
-│   │   ├── battery_monitor.c/h # 电池监控 (动态扫描 ACPI sysfs 电池设备)
-│   │   ├── disk_monitor.c/h    # 磁盘 IO 监控 (自动跳过 loop/zram)
-│   │   ├── net_monitor.c/h     # 网络 IO 监控 (自动选择首个 up 网卡，跳 lo)
-│   │   └── npu_monitor.c/h     # NPU AI 引擎监控 (/sys/class/accel/accel0)
+│   │   ├── gpu_monitor.c/h     # Xe GPU PMU monitoring (dynamically finds xe_ PMU devices)
+│   │   ├── cpu_monitor.c/h     # CPU PMU monitoring (P-Core / E-Core separate counting)
+│   │   ├── mem_monitor.c/h     # Memory bandwidth (IMC counters) + capacity (/proc/meminfo)
+│   │   ├── power_monitor.c/h   # RAPL power monitoring (Package / Core / DRAM)
+│   │   ├── battery_monitor.c/h # Battery monitoring (dynamically scans ACPI sysfs battery devices)
+│   │   ├── disk_monitor.c/h    # Disk I/O monitoring (auto-skips loop/zram)
+│   │   ├── net_monitor.c/h     # Network I/O monitoring (auto-selects first up NIC, skips lo)
+│   │   └── npu_monitor.c/h     # NPU AI engine monitoring (/sys/class/accel/accel0)
 │   ├── display/
-│   │   ├── display.h           # 终端 UI 声明
-│   │   └── display.c           # ANSI 全屏渲染引擎（备用屏幕缓冲区）
+│   │   ├── display.h           # Terminal UI declaration
+│   │   └── display.c           # ANSI full-screen rendering engine (alternate screen buffer)
 │   └── util/
-│       ├── perf_util.h         # PMU 工具函数声明
-│       └── perf_util.c         # perf_event_open 封装 / sysfs 解析
-└── build/                      # 编译输出目录
-    └── xe_top                  # 可执行文件
+│       ├── perf_util.h         # PMU utility function declarations
+│       └── perf_util.c         # perf_event_open wrapper / sysfs parsing
+└── build/                      # Build output directory
+    └── xe_top                  # Executable
 ```
 
-## UI 布局
+## UI Layout
 
-```
-┌─ INTEL CORE ULTRA SOC MONITOR ─────────────────────┐
-│                                                     │
-│ ┌─ CPU (P-Core / E-Core) ────────────────────────┐ │
-│ │ P-Core: 3800.0MHz IPC:1.23  [■■■■■■■■░░░░] L3: 2.10% │
-│ │       Br Miss: 0.50%                            │ │
-│ │ E-Core: 2500.0MHz IPC:0.89  [■■■■■■░░░░░░] L3: 1.80% │
-│ │       Br Miss: 0.30%                            │ │
-│ │ Core C6: 45.0% [■■■■■■■■░░] Pkg C10: 30.0% [■■■■■■░░] │
-│ │ 热裕度: 45 ℃                                  │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                     │
-│ ┌─ Xe Graphics & NPU ────────────────────────────┐ │
-│ │ 渲染占用:  23.5% [■■■■■■■■■■■■■■■■■■░░░░░░░░]    │ │
-│ │ 视频解码:   5.2% [■■■■░░░░░░░░░░░░░░░░░░░░░░]    │ │
-│ │ 显存占用: 456.78 MiB (共享系统内存)              │ │
-│ │ AI 引擎 (NPU):  12.3% [■■■■■■░░░░] 频率: 800 / 1400 MHz │
-│ │ NPU 显存占用: 128.00 MiB                         │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                     │
-│ ┌─ SOC (Memory & Power & Battery) ───────────────┐ │
-│ │ RAM:  3.45 / 15.31 GiB [■■■░░░░░░░░░░░]  22.5%   │ │
-│ │ MEM 读取: 1234.56 MiB/s  写入:  567.89 MiB/s    │ │
-│ │ PWR Pkg: 12.34 W  Core:  5.67 W  DRAM: 1.23 W  │ │
-│ │ BAT Discharging  78%  [■■■■■■■■■■■■░░░░░░] 4.56W │
-│ └─────────────────────────────────────────────────┘ │
-│                                                     │
-│ ┌─ IO (Disk & Network) ──────────────────────────┐ │
-│ │ DSK 读取:  45.67 MiB/s  写入:  23.45 MiB/s      │ │
-│ │ NET 下载:   1.23 MiB/s  上传:   0.45 MiB/s      │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                     │
-│              Press Ctrl+C to quit                    │
-└─────────────────────────────────────────────────────┘
-```
+![ui layout](./images/screenshot.png)
 
-## 技术实现
+## Technical Implementation
 
-### 数据采集
+### Data Collection
 
-| 模块 | 技术路径 | 详细说明 |
-|------|---------|---------|
-| **GPU** | `perf_event_open` → Xe PMU | 动态扫描 `/sys/bus/event_source/devices/` 查找 `xe_` 前缀 PMU 设备；从 sysfs 动态解析 `event` / `engine_class` / `engine_instance` / `gt` 字段的位偏移；分别打开渲染引擎和视频解码引擎的 active-ticks / total-ticks 计数器；通过轮询 `/proc/*/fdinfo` 按 drm-client-id 去重累加 GTT 显存占用（每 3 个采样周期扫描一次以降低开销） |
-| **CPU** | `perf_event_open` → 架构 PMU | 分别绑定 P-Core (`cpu_core`) 和 E-Core (`cpu_atom`) 的 `instructions`, `cycles`, `ref-cycles` 等架构事件；通过 MSR 类型 PMU 读取 `aperf`/`mperf` 计算实际频率；通过 `cstate_core`/`cstate_pkg` PMU 读取 C6/C10 驻留计数；通过 MSR 热裕度事件获取降频前温度余量 |
-| **内存带宽** | `perf_event_open` → Uncore IMC | 打开 `uncore_imc_free_running_0/1` 的 `data_read`/`data_write` 事件（解析 `event=,umask=` 双字段组合 config）；自动读取 sysfs 中的 `.scale` 缩放因子；累计两个 IMC 通道的增量计算带宽 |
-| **内存容量** | 读取 `/proc/meminfo` | 解析 `MemTotal` / `MemAvailable`，真实已用 = Total - Available（包含可回收缓存，与系统监视器一致），单位 kB → MiB → GiB |
-| **功耗** | 读取 RAPL sysfs | 从 `/sys/class/powercap/intel-rapl:0` 读取 Package / Core / DRAM 三路能量计数器 (µJ)；差分计算功率 (W)，防御无符号减法下溢 |
-| **电池** | 读取 ACPI sysfs | 动态扫描 `/sys/class/power_supply/` 查找 `type=Battery` 的设备；从 `current_now` (µA) × `voltage_now` (µV) 计算瞬时功率 (W)；统一取绝对值，充放方向由 `status` 判断 |
-| **磁盘** | 读取 `/sys/block/*/stat` | 自动跳过 `loop` 和 `zram` 虚拟设备，选择首个真实块设备；解析 stat 文件第 3/7 字段（读写扇区数）；Linux 内核固定以 512 字节/扇区计算，差分得到速率 |
-| **网络** | 读取 `/sys/class/net/*/statistics` | 自动跳过 `lo` 回环接口，选择首个 `operstate=up` 的物理网卡；解析 `rx_bytes` / `tx_bytes`，差分计算上下行速率 |
-| **NPU** | 读取 sysfs 设备节点 | 从 `/sys/class/accel/accel0/device/` 读取 `npu_busy_time_us`（累计忙碌微秒）、`npu_current_frequency_mhz`、`npu_max_frequency_mhz`、`npu_memory_utilization`；利用率 = (忙碌时间差 / 流逝时间) × 100% |
+| Module | Technical Path | Details |
+|--------|---------------|---------|
+| **GPU** | `perf_event_open` → Xe PMU | Dynamically scan `/sys/bus/event_source/devices/` for `xe_` prefix PMU devices; parse `event` / `engine_class` / `engine_instance` / `gt` field bit offsets from sysfs; open render engine and video decode engine active-ticks / total-ticks counters; poll `/proc/*/fdinfo` to aggregate GTT VRAM usage by drm-client-id (scan every 3 sampling cycles to reduce overhead) |
+| **CPU** | `perf_event_open` → Architectural PMU | Bind P-Core (`cpu_core`) and E-Core (`cpu_atom`) separately to `instructions`, `cycles`, `ref-cycles` events; read `aperf`/`mperf` via MSR PMU to calculate actual frequency; read C6/C10 residency via `cstate_core`/`cstate_pkg` PMU; read thermal margin via MSR thermal event |
+| **Memory Bandwidth** | `perf_event_open` → Uncore IMC | Open `uncore_imc_free_running_0/1` `data_read`/`data_write` events (parse `event=,umask=` dual-field config); auto-read `.scale` factor from sysfs; accumulate delta from both IMC channels |
+| **Memory Capacity** | Read `/proc/meminfo` | Parse `MemTotal` / `MemAvailable`, real used = Total - Available (includes reclaimable cache, consistent with System Monitor), unit kB → MiB → GiB |
+| **Power** | Read RAPL sysfs | Read Package / Core / DRAM energy counters (µJ) from `/sys/class/powercap/intel-rapl:0`; calculate power (W) from delta, guard against unsigned underflow |
+| **Battery** | Read ACPI sysfs | Dynamically scan `/sys/class/power_supply/` for `type=Battery` devices; calculate instantaneous power (W) from `current_now` (µA) × `voltage_now` (µV); take absolute value, direction from `status` |
+| **Disk** | Read `/sys/block/*/stat` | Auto-skip `loop` and `zram` virtual devices, select first real block device; parse stat file fields 3/7 (read/write sector count); Linux kernel fixed 512 bytes/sector, delta for rate |
+| **Network** | Read `/sys/class/net/*/statistics` | Auto-skip `lo` loopback interface, select first physical NIC with `operstate=up`; parse `rx_bytes` / `tx_bytes`, delta for up/down rate |
+| **NPU** | Read sysfs device nodes | Read `npu_busy_time_us` (cumulative busy microseconds), `npu_current_frequency_mhz`, `npu_max_frequency_mhz`, `npu_memory_utilization` from `/sys/class/accel/accel0/device/`; utilization = (busy time delta / elapsed time) × 100% |
 
-### 显示引擎
+### Display Engine
 
-- 使用 **ANSI 转义序列** 实现全屏覆盖式 UI（无闪烁、无清屏）
-- **备用屏幕缓冲区**：进入时 `\033[?1049h` 保存终端内容，退出时 `\033[?1049l` 恢复原画面
-- **非阻塞键盘输入**：`tcsetattr` 关闭回显 (ECHO) 和规范模式 (ICANON)，设置 `VMIN=0, VTIME=0` 使 `read()` 立即返回；主循环中每次迭代读取并丢弃 stdin 缓冲区，防止输入堆积
-- **信号处理**：捕获 `SIGINT` / `SIGTERM` / `SIGHUP`，设置 `running=0` 优雅退出并恢复终端
-- **自适应终端尺寸**：每次渲染通过 `ioctl TIOCGWINSZ` 实时获取终端宽高；检测尺寸变化时自动清屏消除残影
-- **btop 风格动态进度条**：`\033[K` 清除行尾，填充字符为 `■`（已占）和 `░`（未占）；随百分比自动变色：≤50% 绿色 → 80% 黄色 → >80% 红色
-- **UTF-8 框线字符**（`┌─┐│└─┘`）绘制面板，支持禁用模块时显示 `(disabled)` 占位
+- Use **ANSI escape sequences** for full-screen overlay UI (no flicker, no clear screen)
+- **Alternate screen buffer**: Save terminal content on entry with `\033[?1049h`, restore on exit with `\033[?1049l`
+- **Non-blocking keyboard input**: `tcsetattr` to disable echo (ECHO) and canonical mode (ICANON), set `VMIN=0, VTIME=0` for immediate `read()` return; main loop reads and discards stdin buffer each iteration to prevent input buildup
+- **Signal handling**: Capture `SIGINT` / `SIGTERM` / `SIGHUP`, set `running=0` for graceful exit and terminal restore
+- **Adaptive terminal size**: Get terminal width/height via `ioctl TIOCGWINSZ` each render; clear screen on size change to eliminate ghosting
+- **btop-style dynamic progress bars**: Clear line end with `\033[K`, fill characters `■` (filled) and `░` (empty); auto-color by percentage: ≤50% green → 80% yellow → >80% red
+- **UTF-8 box characters** (`┌─┐│└─┘`) for panel drawing, support `(disabled)` placeholder when module disabled
 
-## 构建自定义
+## Build Customization
 
-### CMake 选项
+### CMake Options
 
 ```bash
-# 指定编译器
+# Specify compiler
 CC=clang cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Debug 模式
+# Debug mode
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 
-# 指定架构优化
+# Specify architecture optimization
 cmake -B build -DCMAKE_C_FLAGS="-O2 -march=native"
 ```
 
-### 编译脚本变量
+### Build Script Variables
 
 ```bash
-# 指定编译器
+# Specify compiler
 CC=clang ./make.sh
 
-# 传递 CMake 选项
+# Pass CMake options
 CMAKE_OPTS="-DCMAKE_C_FLAGS=-O2" ./make.sh
 ```
 
-## 已知问题
+## Known Issues
 
-### NPU 频率读取失败
-NPU 实际频率和最大频率显示为 0 或异常值。这是 Intel NPU 驱动的问题，当驱动更新后应该能解决。
+### NPU Frequency Read Failure
+NPU actual and maximum frequency show as 0 or abnormal values. This is an Intel NPU driver issue and should be resolved when the driver is updated.
 
-### 视频引擎占用率无法读取
-Xe GPU 的视频解码引擎占用率目前无法读取，正在修复中。
+### Video Engine Utilization Unavailable
+Xe GPU video decode engine utilization cannot currently be read, fix in progress.
 
-### 更多功能待添加
-- 支持 Core Ultra 系列的其他型号（如 200H、200U）
-- 更多硬件监控指标
-- 历史数据记录和导出
+### More Features Coming Soon
+- Support for other Core Ultra series (e.g., 200H, 200U)
+- More hardware monitoring metrics
+- Historical data recording and export
 
 ---
 
-## 故障排除
+## Troubleshooting
 
-### 权限不足
+### Insufficient Permissions
 
 ```bash
-# 使用 sudo 运行
+# Run with sudo
 sudo ./build/xe_top
 
-# 或将用户加入 perfmon 组（部分系统）
+# Or add user to perfmon group (some systems)
 sudo usermod -a -G perfmon $USER
 ```
 
-### 部分指标显示为 0 或 disabled
+### Some Metrics Show 0 or Disabled
 
 ```bash
-# 检查 PMU 是否可用
+# Check if PMU is available
 sudo dmesg | grep -i perf
 
-# 检查内核模块
+# Check kernel modules
 lsmod | grep -E "i915|xe|intel_rapl"
-lsmod | grep -E "accel"  # NPU 驱动
+lsmod | grep -E "accel"  # NPU driver
 
-# 确认 PMU 设备是否存在
+# Confirm PMU devices exist
 ls /sys/bus/event_source/devices/
 ```
 
-### 内存带宽显示为 0
+### Memory Bandwidth Shows 0
 
 ```bash
-# 确认 Uncore IMC PMU 存在
+# Confirm Uncore IMC PMU exists
 ls /sys/bus/event_source/devices/ | grep uncore_imc
 
-# 检查 IMC 事件文件
+# Check IMC event files
 cat /sys/bus/event_source/devices/uncore_imc_free_running_0/events/data_read
 ```
 
-### 内存容量显示 "(RAM disabled)"
+### Memory Capacity Shows "(RAM disabled)"
 
 ```bash
-# 确认 /proc/meminfo 可读
+# Confirm /proc/meminfo is readable
 cat /proc/meminfo | head -5
 ```
 
-### NPU 不可用
+### NPU Unavailable
 
 ```bash
-# 检查 NPU 设备节点
+# Check NPU device nodes
 ls /sys/class/accel/
 
-# 确认 NPU 驱动加载
+# Confirm NPU driver loaded
 ls /sys/class/accel/accel0/device/
 ```
 
-### 终端显示异常
+### Terminal Display Issues
 
 ```bash
-# 确保终端支持 ANSI 256 色
+# Ensure terminal supports ANSI 256 colors
 export TERM=xterm-256color
 
-# 重置终端（若程序异常退出导致终端状态混乱）
+# Reset terminal (if program exits abnormally leaving terminal in bad state)
 reset
 ```
 
-### 程序异常退出导致终端状态混乱
+### Program Abnormal Exit Causes Terminal State Issues
 
-如果程序未经清理退出（如 `kill -9`），可能遗留以下问题：
-- **回显关闭**：输入字符不显示 → 运行 `stty echo` 恢复
-- **光标隐藏**：光标消失 → 运行 `printf '\033[?25h'` 显示光标
-- **备用屏幕残留** → 运行 `printf '\033[?1049l'` 退出备用屏幕
+If program exits without cleanup (e.g., `kill -9`), the following issues may remain:
+- **Echo disabled**: Input not visible → Run `stty echo` to restore
+- **Cursor hidden**: Cursor disappeared → Run `printf '\033[?25h'` to show cursor
+- **Alternate screen stuck** → Run `printf '\033[?1049l'` to exit alternate screen
 
-直接运行 `reset` 可一键恢复所有终端属性。
+Running `reset` directly can restore all terminal attributes at once.
 
-## 许可证
+## License
 
-本项目基于 [GPL-2.0](LICENSE) 许可证发布。
+This project is released under the [GPL-2.0](LICENSE) license.
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
 ---
 
