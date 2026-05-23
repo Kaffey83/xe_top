@@ -1,3 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * xe_top - Intel Core Ultra Full-Stack Performance Monitoring Tool
+ * 
+ * Copyright (C) 2025
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 #define _POSIX_C_SOURCE 199309L
 
 #include "config/config.h"
@@ -22,7 +38,7 @@
 
 static volatile sig_atomic_t running = 1;
 
-/* 统一处理退出信号，确保终端状态恢复 */
+/* Handle exit signals uniformly to ensure terminal state is restored */
 static void handle_signal(int sig)
 {
     (void)sig;
@@ -37,7 +53,7 @@ static void setup_signals(void)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
 
-    /* 捕获中断 (Ctrl+C)、终止 和 挂起 (关闭终端) 信号 */
+    /* Catch interrupt (Ctrl+C), termination, and hangup (terminal close) signals */
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
@@ -45,7 +61,7 @@ static void setup_signals(void)
 
 int main(int argc, char *argv[])
 {
-    /* --- 解析配置 --- */
+    /* --- Parse configuration --- */
     runtime_config_t cfg;
     config_parse(argc, argv, &cfg);
 
@@ -54,7 +70,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /* --- 初始化请求的监控模块 --- */
+    /* --- Initialize requested monitoring modules --- */
     int gpu_ok = cfg.enable_gpu ? (gpu_monitor_init() == 0) : 0;
     int cpu_ok = cfg.enable_cpu ? (cpu_monitor_init() == 0) : 0;
     int pwr_ok = cfg.enable_power ? (power_monitor_init() == 0) : 0;
@@ -66,15 +82,15 @@ int main(int argc, char *argv[])
 
     if (!gpu_ok && !cpu_ok && !pwr_ok && !mem_ok && !bat_ok && !dsk_ok && !net_ok && !npu_ok)
     {
-        fprintf(stderr, "所有监控模块初始化均失败，退出。\n");
-        goto cleanup; /* 跳转到清理逻辑，避免直接退出导致资源泄漏 */
+        fprintf(stderr, "All monitoring module initialization failed, exiting.\n");
+        goto cleanup; /* Jump to cleanup to avoid resource leaks */
     }
 
-    /* --- 初始化全屏显示与信号处理 --- */
+    /* --- Initialize fullscreen display and signal handling --- */
     display_init();
     setup_signals();
 
-    /* --- 初始采样 --- */
+    /* --- Initial sampling --- */
     gpu_stats_t prev_gpu = {0};
     cpu_stats_t prev_cpu = {0};
     power_stats_t prev_pwr = {0};
@@ -92,17 +108,17 @@ int main(int argc, char *argv[])
     struct timespec ts_start, ts_end;
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
-    /* --- 主循环 --- */
+    /* --- Main loop --- */
     while (running)
     {
-        /* 非阻塞地读取并丢弃用户误输入的字符，防止输入缓冲区满 */
+        /* Non-blocking read and discard of accidental user input */
         char discard_buf[64];
         ssize_t n_read;
         do {
             n_read = read(STDIN_FILENO, discard_buf, sizeof(discard_buf));
         } while (n_read > 0 || (n_read < 0 && errno == EINTR));
 
-        /* 亚秒级休眠 (兼容 int 和 double 类型的 interval_sec) */
+        /* Sub-second sleep (compatible with int and double interval_sec) */
         double interval = (double)cfg.interval_sec;
         struct timespec req = {
             .tv_sec = (time_t)interval,
@@ -110,7 +126,7 @@ int main(int argc, char *argv[])
         };
         nanosleep(&req, NULL);
 
-        /* 读取当前采样值 */
+        /* Read current sample values */
         gpu_stats_t cur_gpu = {0};
         cpu_stats_t cur_cpu = {0};
         power_stats_t cur_pwr = {0};
@@ -134,7 +150,7 @@ int main(int argc, char *argv[])
         double elapsed = (ts_end.tv_sec - ts_start.tv_sec) +
                          (double)(ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
 
-        /* --- 计算指标 --- */
+        /* --- Compute metrics --- */
         gpu_metrics_t gpu_metrics = {0};
         cpu_metrics_t cpu_metrics = {0};
         power_metrics_t power_metrics = {0};
@@ -150,7 +166,7 @@ int main(int argc, char *argv[])
         if (net_ok && elapsed > 0.0) net_monitor_compute(&prev_net, &cur_net, elapsed, &net_metrics);
         if (npu_ok && elapsed > 0.0) npu_monitor_compute(&prev_npu, &cur_npu, elapsed, &npu_metrics);
 
-        /* --- 渲染全屏 UI --- */
+        /* --- Render fullscreen UI --- */
         display_render(gpu_ok ? &gpu_metrics : NULL,
                        cpu_ok ? &cpu_metrics : NULL,
                        mem_ok ? &cur_mem : NULL,
@@ -161,7 +177,7 @@ int main(int argc, char *argv[])
                        net_ok ? &net_metrics : NULL,
                        npu_ok ? &npu_metrics : NULL);
 
-        /* --- 保存状态供下一次迭代使用 --- */
+        /* --- Save state for next iteration --- */
         if (gpu_ok) prev_gpu = cur_gpu;
         if (cpu_ok) prev_cpu = cur_cpu;
         if (pwr_ok) prev_pwr = cur_pwr;
@@ -173,7 +189,7 @@ int main(int argc, char *argv[])
     }
 
 cleanup:
-    /* --- 清理 --- */
+    /* --- Cleanup --- */
     display_cleanup();
     if (gpu_ok) gpu_monitor_cleanup();
     if (cpu_ok) cpu_monitor_cleanup();

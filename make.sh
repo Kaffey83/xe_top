@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# xe_top — Intel Lunar Lake 全栈性能监控工具 构建脚本
+# xe_top — Intel Core Ultra 全栈性能监控工具 构建脚本
 # 使用 CMake 编译项目
 #
 
@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 PROJECT="xe_top"
 
 echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN}   ${PROJECT} — Lunar Lake 全栈监控工具${NC}"
+echo -e "${CYAN}   ${PROJECT} — Intel Core Ultra 全栈监控工具${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 

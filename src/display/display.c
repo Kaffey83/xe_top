@@ -1,9 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * xe_top - Intel Core Ultra Full-Stack Performance Monitoring Tool
+ * 
+ * Copyright (C) 2025
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 #include "display.h"
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <string.h>
-#include <termios.h>  // 新增：用于控制终端输入
+#include <termios.h>
 
 /* ── 框线字符 (UTF-8) ── */
 #define HORIZ "─"
@@ -29,7 +45,7 @@ static int term_cols = 80;
 static int term_rows = 24;
 static int prev_term_cols = -1;
 static int prev_term_rows = -1;
-static struct termios orig_termios; // 新增：保存原始终端属性
+static struct termios orig_termios;
 
 static void gotoxy(int row, int col)
 {
@@ -194,7 +210,7 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
     /* ── 标题栏 ── */
     gotoxy(cur_row, 1);
     fputs("\033[K", stdout);
-    const char *title_str = " LUNAR LAKE SOC MONITOR ";
+    const char *title_str = " INTEL CORE ULTRA SOC MONITOR ";
     int x = (w - (int)strlen(title_str)) / 2;
     if (x < 1)
     {
@@ -499,7 +515,7 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
 
 void display_cleanup(void)
 {
-    /* 新增：恢复原始终端输入属性 */
+    /* 恢复原始终端输入属性 */
     tcsetattr(STDIN_FILENO, TCSANOW, &orig_termios);
 
     /* 关闭备用屏幕缓冲区，恢复原始终端内容 */

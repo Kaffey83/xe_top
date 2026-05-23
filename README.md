@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Intel Lunar Lake 平台全栈性能监控工具**
+**Intel Core Ultra 平台全栈性能监控工具**
 
 实时监控 GPU · CPU · 内存(带宽+容量) · 功耗(RAPL) · 电池 · 磁盘 · 网络 · NPU
 
@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux-brightgreen.svg)](https://www.kernel.org/)
 [![Language](https://img.shields.io/badge/language-C11-orange.svg)](https://en.cppreference.com/wiki/c/help/idx/intro)
-[![CPU](https://img.shields.io/badge/CPU-Lunar%20Lake-blueviolet)](https://www.intel.com/)
+[![CPU](https://img.shields.io/badge/CPU-Intel%20Core%20Ultra-blueviolet)](https://www.intel.com/)
 
 </div>
 
@@ -35,7 +35,7 @@
 
 | 项目 | 要求 |
 |------|------|
-| **CPU** | Intel Lunar Lake (Core Ultra 200V 系列) |
+| **CPU** | Intel Core Ultra (200V / 200H / 200U 系列) |
 | **操作系统** | Linux 内核 ≥ 6.8（推荐） |
 | **权限** | 部分指标需 `root` 权限（RAPL 功耗、PMU 计数器） |
 | **依赖** | `cmake`, `gcc`/`clang`, `make`, librt, libm（系统标准库） |
@@ -101,7 +101,6 @@ sudo ./build/xe_top --no-gpu --no-cpu --no-power
 ## 项目结构
 
 ```
-cpp/
 ├── CMakeLists.txt              # CMake 构建配置 (C11, -Wall -Werror)
 ├── make.sh                     # 快速编译脚本（自动检测依赖、颜色输出）
 ├── README.md                   # 项目文档
@@ -132,7 +131,7 @@ cpp/
 ## UI 布局
 
 ```
-┌─ LUNAR LAKE SOC MONITOR ──────────────────────────┐
+┌─ INTEL CORE ULTRA SOC MONITOR ─────────────────────┐
 │                                                     │
 │ ┌─ CPU (P-Core / E-Core) ────────────────────────┐ │
 │ │ P-Core: 3800.0MHz IPC:1.23  [■■■■■■■■░░░░] L3: 2.10% │
@@ -217,6 +216,21 @@ CC=clang ./make.sh
 # 传递 CMake 选项
 CMAKE_OPTS="-DCMAKE_C_FLAGS=-O2" ./make.sh
 ```
+
+## 已知问题
+
+### NPU 频率读取失败
+NPU 实际频率和最大频率显示为 0 或异常值。这是 Intel NPU 驱动的问题，当驱动更新后应该能解决。
+
+### 视频引擎占用率无法读取
+Xe GPU 的视频解码引擎占用率目前无法读取，正在修复中。
+
+### 更多功能待添加
+- 支持 Core Ultra 系列的其他型号（如 200H、200U）
+- 更多硬件监控指标
+- 历史数据记录和导出
+
+---
 
 ## 故障排除
 
