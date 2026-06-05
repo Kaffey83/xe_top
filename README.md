@@ -2,17 +2,17 @@
 
 <div align="center">
 
-**Intel Core Ultra Full-Stack Performance Monitoring Tool**
+**Intel Core Ultra Full-Stack Performance Monitor**
 
-Real-time monitoring of GPU · CPU · Memory(Bandwidth+Capacity) · Power(RAPL) · Battery · Disk · Network · NPU
+Real-time TUI monitoring of GPU · CPU · Memory · Power · Battery · Disk · Network · NPU
 
-Full-screen terminal UI similar to `top`, data from Linux PMU / sysfs, consistent with Ubuntu System Monitor logic
-
-[![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Linux-brightgreen.svg)](https://www.kernel.org/)
-[![Language](https://img.shields.io/badge/language-C11-orange.svg)](https://en.cppreference.com/wiki/c/help/idx/intro)
+[![License](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20x86__64-brightgreen.svg)](https://www.kernel.org/)
+[![Language](https://img.shields.io/badge/language-C11-orange.svg)](https://en.cppreference.com/w/c/11)
 [![CPU](https://img.shields.io/badge/CPU-Intel%20Core%20Ultra-blueviolet)](https://www.intel.com/)
+
 [English](./README.md) | [中文](./README.zh.md)
+
 </div>
 
 ---
@@ -21,72 +21,78 @@ Full-screen terminal UI similar to `top`, data from Linux PMU / sysfs, consisten
 
 | Module | Data Source | Metrics |
 |--------|-------------|---------|
-| **Xe GPU** | Kernel PMU driver | Render engine utilization (%), Video engine utilization (%), Actual frequency (MHz), VRAM usage (MiB) |
-| **CPU** | Hardware performance counters | P-Core / E-Core actual frequency (MHz), IPC, Cache miss rate (%), Branch miss rate (%), C6/C10 deep sleep percentage (%), Thermal margin (°C) |
-| **Memory Bandwidth** | Uncore IMC counters | Read/Write bandwidth (MiB/s, GB/s) |
-| **Memory Capacity** | `/proc/meminfo` | Total / Used / Available (GiB), Usage (%), based on MemAvailable (includes reclaimable cache, consistent with System Monitor) |
-| **RAPL Power** | Kernel MSR/sysfs | Package / Core / DRAM power (W) |
-| **Battery** | ACPI sysfs | Charge/discharge status, Remaining capacity (%), Instantaneous power (W) |
-| **Disk I/O** | `/sys/block` | Read/Write rate (MiB/s) |
-| **Network I/O** | `/sys/class/net` | Download/Upload rate (MiB/s) |
-| **NPU (AI Engine)** | sysfs device nodes | Utilization (%), Actual/Max frequency (MHz), Memory usage (MiB) |
+| **Xe GPU** | Kernel PMU (`perf_event_open`) | Render engine %, Video engine %, Frequency (MHz), VRAM (MiB) |
+| **CPU** | Architectural PMU + MSR | P-Core / E-Core frequency (MHz), IPC, L3 miss %, Branch miss %, C6/C10 %, Thermal margin (°C) |
+| **Memory BW** | Uncore IMC counters | Read / Write bandwidth (MiB/s) |
+| **Memory Cap** | `/proc/meminfo` | Total / Used / Available (GiB), Usage % (includes reclaimable cache) |
+| **Power** | RAPL sysfs (cached fd) | Package / Core / DRAM power (W) |
+| **Battery** | ACPI sysfs | Status, Capacity %, Power (W) |
+| **Disk I/O** | `/sys/block/*/stat` (cached fd) | Read / Write rate (MiB/s) |
+| **Network** | `/sys/class/net/*/statistics` (cached fd) | Download / Upload rate (MiB/s) |
+| **NPU** | `/sys/class/accel/accel0/device/` (cached fd) | Utilization %, Frequency (MHz), Memory (MiB) |
 
 ## System Requirements
 
 | Item | Requirement |
 |------|-------------|
 | **CPU** | Intel Core Ultra (200V / 200H / 200U series) |
-| **OS** | Linux kernel ≥ 6.18 (Xe GPU driver merged in 6.18) |
-| **Permissions** | Some metrics require `root` (RAPL power, PMU counters) |
-| **Dependencies** | `cmake`, `gcc`/`clang`, `make`, librt, libm (system standard libraries) |
+| **OS** | Linux kernel ≥ 6.18 (Xe GPU driver merged into mainline in 6.18) |
+| **Distro** | Ubuntu 25.10+ (or any distro with kernel 6.18+) |
+| **Permissions** | Most metrics require `root` (PMU counters, RAPL energy) |
+| **Dependencies** | `cmake` ≥ 3.10, `gcc` ≥ 14 / `clang` ≥ 18, `make`, librt, libm |
 
 ## Quick Start
 
 ### Build
 
 ```bash
-# Using project script (recommended)
-chmod +x make.sh
-./make.sh
+# Using build script (recommended)
+chmod +x make.sh && ./make.sh
 
-# Or build manually with CMake
+# Or manually with CMake
 cmake -B build && cmake --build build
 ```
 
-Build output is located at `build/xe_top`.
+Executable: `build/xe_top`
 
 ### Run
 
 ```bash
-# Full monitoring (sudo recommended, some features require root)
+# Full monitoring (sudo recommended)
 sudo ./build/xe_top
 
-# Custom refresh interval (2 seconds)
-sudo ./build/xe_top -i 2
+# Custom refresh interval (0.5 seconds)
+sudo ./build/xe_top -i 0.5
 
 # Disable specific modules
 sudo ./build/xe_top --no-gpu --no-cpu --no-power
 
-# Monitor only CPU + GPU (no root required)
+# CPU + GPU only (no root needed for some metrics)
 ./build/xe_top --no-power --no-battery --no-disk --no-net
+
+# Show version
+./build/xe_top --version
 
 # Show help
 ./build/xe_top -h
 ```
 
-### Keyboard Shortcuts
+### Interactive Keys
 
 | Key | Function |
 |-----|----------|
-| `Ctrl+C` | Exit program (via signal handling + non-blocking stdin read) |
+| `q` / `Esc` | Quit |
+| `+` / `-` | Adjust refresh interval (±0.1s) |
+| `p` | Pause / Resume data collection |
+| `h` | Toggle help overlay |
 
 ## Command-Line Options
 
 ```
-Usage: ./xe_top [OPTIONS]
+Usage: xe_top [OPTIONS]
 
 Options:
-  -i, --interval <sec>  Refresh interval (default: 1, supports sub-second, minimum 0.1)
+  -i, --interval <sec>  Refresh interval (default: 1, range: 0.1-60)
   -G, --no-gpu         Disable GPU monitoring
   -C, --no-cpu         Disable CPU monitoring
   -P, --no-power       Disable power monitoring
@@ -95,193 +101,124 @@ Options:
   -D, --no-disk        Disable disk monitoring
   -N, --no-net         Disable network monitoring
   -A, --no-npu         Disable NPU monitoring
-  -h, --help           Display this help message
+  -V, --version        Show version number
+  -h, --help           Show this help message
 ```
 
 ## Project Structure
 
 ```
-├── CMakeLists.txt              # CMake build configuration (C11, -Wall -Werror)
-├── make.sh                     # Quick build script (auto-detects dependencies, colored output)
-├── README.md                   # Project documentation
+├── CMakeLists.txt          # CMake build (C11, -Wall -Wextra -Wpedantic -Werror)
+├── make.sh                 # Build script (auto-detect deps, colored output)
 ├── src/
-│   ├── main.c                  # Program entry and main loop (signal handling + non-blocking stdin)
+│   ├── main.c              # Entry point, main loop, signal handling, key dispatch
 │   ├── config/
-│   │   ├── config.h            # Runtime configuration structure (module enable flags, interval)
-│   │   └── config.c            # getopt_long command-line argument parsing (supports sub-second interval)
+│   │   ├── config.h        # Runtime config struct (module flags, interval)
+│   │   └── config.c        # getopt_long argument parsing, interval validation
 │   ├── monitor/
-│   │   ├── gpu_monitor.c/h     # Xe GPU PMU monitoring (dynamically finds xe_ PMU devices)
-│   │   ├── cpu_monitor.c/h     # CPU PMU monitoring (P-Core / E-Core separate counting)
-│   │   ├── mem_monitor.c/h     # Memory bandwidth (IMC counters) + capacity (/proc/meminfo)
-│   │   ├── power_monitor.c/h   # RAPL power monitoring (Package / Core / DRAM)
-│   │   ├── battery_monitor.c/h # Battery monitoring (dynamically scans ACPI sysfs battery devices)
-│   │   ├── disk_monitor.c/h    # Disk I/O monitoring (auto-skips loop/zram)
-│   │   ├── net_monitor.c/h     # Network I/O monitoring (auto-selects first up NIC, skips lo)
-│   │   └── npu_monitor.c/h     # NPU AI engine monitoring (/sys/class/accel/accel0)
+│   │   ├── paths.h         # Centralized sysfs paths and tunable constants
+│   │   ├── gpu_monitor.c/h # Xe GPU PMU (dynamic xe_ device scan, GTT VRAM)
+│   │   ├── cpu_monitor.c/h # CPU PMU (P-Core/E-Core, MSR freq, cstate, thermal)
+│   │   ├── mem_monitor.c/h # Memory BW (IMC counters) + capacity (/proc/meminfo)
+│   │   ├── power_monitor.c/h # RAPL power (cached fd + pread)
+│   │   ├── battery_monitor.c/h # Battery (dynamic ACPI sysfs scan)
+│   │   ├── disk_monitor.c/h  # Disk I/O (cached fd, auto-skip loop/zram)
+│   │   ├── net_monitor.c/h   # Network I/O (cached fd, auto-select up NIC)
+│   │   └── npu_monitor.c/h   # NPU AI engine (cached fd, graceful degradation)
 │   ├── display/
-│   │   ├── display.h           # Terminal UI declaration
-│   │   └── display.c           # ANSI full-screen rendering engine (alternate screen buffer)
+│   │   ├── display.h       # TUI render API
+│   │   ├── display.c       # Full-screen renderer (panels, bars, sparklines, help)
+│   │   ├── style.h         # ANSI colors, box-drawing chars, sparkline chars
+│   │   └── term.h          # Terminal control abstraction
 │   └── util/
-│       ├── perf_util.h         # PMU utility function declarations
-│       └── perf_util.c         # perf_event_open wrapper / sysfs parsing
-└── build/                      # Build output directory
-    └── xe_top                  # Executable
+│       ├── common.h        # DELTA_SAFE, clamp_ll, MIN/MAX, ARRAY_SIZE macros
+│       ├── ring.h          # Ring buffer for sparkline history (60 samples)
+│       ├── version.h       # Version macros (XE_TOP_VERSION_STRING)
+│       ├── perf_util.h     # PMU helper declarations
+│       └── perf_util.c     # perf_event_open wrapper, sysfs PMU parsing
+├── tests/
+│   ├── test_common.c       # Unit tests for common.h macros
+│   └── test_ring.c         # Unit tests for ring buffer
+├── docs/
+│   └── xe_top.1            # Man page
+├── .github/workflows/ci.yml # CI (Ubuntu 25.10, multi-compiler matrix)
+└── .clang-tidy             # Static analysis config
 ```
 
 ## UI Layout
 
-![ui layout](./images/screenshot.png)
+![screenshot](./images/screenshot.png)
 
-## Technical Implementation
+## Technical Details
 
 ### Data Collection
 
-| Module | Technical Path | Details |
-|--------|---------------|---------|
-| **GPU** | `perf_event_open` → Xe PMU | Dynamically scan `/sys/bus/event_source/devices/` for `xe_` prefix PMU devices; parse `event` / `engine_class` / `engine_instance` / `gt` field bit offsets from sysfs; open render engine and video decode engine active-ticks / total-ticks counters; poll `/proc/*/fdinfo` to aggregate GTT VRAM usage by drm-client-id (scan every 3 sampling cycles to reduce overhead) |
-| **CPU** | `perf_event_open` → Architectural PMU | Bind P-Core (`cpu_core`) and E-Core (`cpu_atom`) separately to `instructions`, `cycles`, `ref-cycles` events; read `aperf`/`mperf` via MSR PMU to calculate actual frequency; read C6/C10 residency via `cstate_core`/`cstate_pkg` PMU; read thermal margin via MSR thermal event |
-| **Memory Bandwidth** | `perf_event_open` → Uncore IMC | Open `uncore_imc_free_running_0/1` `data_read`/`data_write` events (parse `event=,umask=` dual-field config); auto-read `.scale` factor from sysfs; accumulate delta from both IMC channels |
-| **Memory Capacity** | Read `/proc/meminfo` | Parse `MemTotal` / `MemAvailable`, real used = Total - Available (includes reclaimable cache, consistent with System Monitor), unit kB → MiB → GiB |
-| **Power** | Read RAPL sysfs | Read Package / Core / DRAM energy counters (µJ) from `/sys/class/powercap/intel-rapl:0`; calculate power (W) from delta, guard against unsigned underflow |
-| **Battery** | Read ACPI sysfs | Dynamically scan `/sys/class/power_supply/` for `type=Battery` devices; calculate instantaneous power (W) from `current_now` (µA) × `voltage_now` (µV); take absolute value, direction from `status` |
-| **Disk** | Read `/sys/block/*/stat` | Auto-skip `loop` and `zram` virtual devices, select first real block device; parse stat file fields 3/7 (read/write sector count); Linux kernel fixed 512 bytes/sector, delta for rate |
-| **Network** | Read `/sys/class/net/*/statistics` | Auto-skip `lo` loopback interface, select first physical NIC with `operstate=up`; parse `rx_bytes` / `tx_bytes`, delta for up/down rate |
-| **NPU** | Read sysfs device nodes | Read `npu_busy_time_us` (cumulative busy microseconds), `npu_current_frequency_mhz`, `npu_max_frequency_mhz`, `npu_memory_utilization` from `/sys/class/accel/accel0/device/`; utilization = (busy time delta / elapsed time) × 100% |
+- **GPU**: Dynamically scans `/sys/bus/event_source/devices/` for `xe_` PMU devices; parses event/engine_class/engine_instance/gt bit offsets from sysfs; opens render + video engine active/total ticks counters; polls `/proc/*/fdinfo` for GTT VRAM by drm-client-id (every 3 cycles)
+- **CPU**: Binds P-Core (`cpu_core`) and E-Core (`cpu_atom`) to instructions/cycles/ref-cycles; reads aperf/mperf via MSR for actual frequency; reads C6/C10 via cstate PMU; reads thermal margin via MSR
+- **Memory BW**: Opens `uncore_imc_free_running_0/1` data_read/data_write events; auto-reads `.scale` factor; accumulates both IMC channels
+- **Memory Cap**: Parses `/proc/meminfo` MemTotal/MemAvailable; used = Total - Available (consistent with System Monitor)
+- **Power**: Reads RAPL energy counters via cached fd + `pread`; computes watts from delta with `DELTA_SAFE` underflow protection
+- **Battery**: Dynamically scans `/sys/class/power_supply/` for battery devices; power = |current_now × voltage_now|
+- **Disk/NPU/Net**: All use cached file descriptors opened at init, read via `pread` each cycle
 
 ### Display Engine
 
-- Use **ANSI escape sequences** for full-screen overlay UI (no flicker, no clear screen)
-- **Alternate screen buffer**: Save terminal content on entry with `\033[?1049h`, restore on exit with `\033[?1049l`
-- **Non-blocking keyboard input**: `tcsetattr` to disable echo (ECHO) and canonical mode (ICANON), set `VMIN=0, VTIME=0` for immediate `read()` return; main loop reads and discards stdin buffer each iteration to prevent input buildup
-- **Signal handling**: Capture `SIGINT` / `SIGTERM` / `SIGHUP`, set `running=0` for graceful exit and terminal restore
-- **Adaptive terminal size**: Get terminal width/height via `ioctl TIOCGWINSZ` each render; clear screen on size change to eliminate ghosting
-- **btop-style dynamic progress bars**: Clear line end with `\033[K`, fill characters `■` (filled) and `░` (empty); auto-color by percentage: ≤50% green → 80% yellow → >80% red
-- **UTF-8 box characters** (`┌─┐│└─┘`) for panel drawing, support `(disabled)` placeholder when module disabled
+- ANSI escape sequences for full-screen overlay UI (no flicker)
+- Alternate screen buffer (`\033[?1049h` / `\033[?1049l`)
+- Non-blocking stdin with `tcsetattr` (ECHO off, ICANON off, VMIN=0)
+- Signal handling (SIGINT/SIGTERM/SIGHUP → graceful exit)
+- Adaptive terminal size via `ioctl TIOCGWINSZ`
+- btop-style progress bars with auto-color (≤50% green → 80% yellow → >80% red)
+- Sparkline history rings (60 samples, 8-level `▁▂▃▄▅▆▇█`)
+- Help overlay toggled by `h` key
+- stderr redirected to `/dev/null` to prevent TUI corruption
 
-## Build Customization
-
-### CMake Options
+## Build Options
 
 ```bash
-# Specify compiler
-CC=clang cmake -B build -DCMAKE_BUILD_TYPE=Release
+# Release build (default)
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Debug mode
+# Debug build
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 
-# Specify architecture optimization
-cmake -B build -DCMAKE_C_FLAGS="-O2 -march=native"
-```
+# With AddressSanitizer
+cmake -B build -DENABLE_ASAN=ON
 
-### Build Script Variables
+# With UBSan
+cmake -B build -DENABLE_UBSAN=ON
 
-```bash
-# Specify compiler
-CC=clang ./make.sh
+# Install
+sudo cmake --install build --prefix=/usr/local
 
-# Pass CMake options
-CMAKE_OPTS="-DCMAKE_C_FLAGS=-O2" ./make.sh
+# Run tests
+cd build && ./test_common && ./test_ring
 ```
 
 ## Known Issues
 
-### NPU Frequency Read Failure
-NPU actual and maximum frequency show as 0 or abnormal values. This is an Intel NPU driver issue and should be resolved when the driver is updated.
-
-### Video Engine Utilization Unavailable
-Xe GPU video decode engine utilization cannot currently be read, fix in progress.
-
-### More Features Coming Soon
-- Support for other Core Ultra series (e.g., 200H, 200U)
-- More hardware monitoring metrics
-- Historical data recording and export
-
----
+- **NPU frequency**: Shows `N/A (driver unsupported)` when driver doesn't report freq info (Intel NPU driver bug)
+- **Video engine**: Shows `(unsupported)` when video decode PMU counters are unavailable
 
 ## Troubleshooting
 
-### Insufficient Permissions
-
 ```bash
-# Run with sudo
-sudo ./build/xe_top
-
-# Or add user to perfmon group (some systems)
-sudo usermod -a -G perfmon $USER
-```
-
-### Some Metrics Show 0 or Disabled
-
-```bash
-# Check if PMU is available
-sudo dmesg | grep -i perf
+# Check PMU availability
+ls /sys/bus/event_source/devices/ | grep -E "xe_|cpu_core|cpu_atom|uncore_imc"
 
 # Check kernel modules
-lsmod | grep -E "i915|xe|intel_rapl"
-lsmod | grep -E "accel"  # NPU driver
+lsmod | grep -E "xe|intel_rapl|accel"
 
-# Confirm PMU devices exist
-ls /sys/bus/event_source/devices/
-```
+# Check RAPL
+cat /sys/class/powercap/intel-rapl:0/energy_uj
 
-### Memory Bandwidth Shows 0
-
-```bash
-# Confirm Uncore IMC PMU exists
-ls /sys/bus/event_source/devices/ | grep uncore_imc
-
-# Check IMC event files
-cat /sys/bus/event_source/devices/uncore_imc_free_running_0/events/data_read
-```
-
-### Memory Capacity Shows "(RAM disabled)"
-
-```bash
-# Confirm /proc/meminfo is readable
-cat /proc/meminfo | head -5
-```
-
-### NPU Unavailable
-
-```bash
-# Check NPU device nodes
-ls /sys/class/accel/
-
-# Confirm NPU driver loaded
+# Check NPU
 ls /sys/class/accel/accel0/device/
-```
 
-### Terminal Display Issues
-
-```bash
-# Ensure terminal supports ANSI 256 colors
-export TERM=xterm-256color
-
-# Reset terminal (if program exits abnormally leaving terminal in bad state)
+# Reset terminal after abnormal exit
 reset
 ```
 
-### Program Abnormal Exit Causes Terminal State Issues
-
-If program exits without cleanup (e.g., `kill -9`), the following issues may remain:
-- **Echo disabled**: Input not visible → Run `stty echo` to restore
-- **Cursor hidden**: Cursor disappeared → Run `printf '\033[?25h'` to show cursor
-- **Alternate screen stuck** → Run `printf '\033[?1049l'` to exit alternate screen
-
-Running `reset` directly can restore all terminal attributes at once.
-
 ## License
 
-This project is released under the [GPL-2.0](LICENSE) license.
-
-## Contributing
-
-Issues and Pull Requests are welcome!
-
----
-
-<div align="center">
-
-**Made with ❤️ for Linux performance enthusiasts**
-
-</div>
+[GPL-2.0](LICENSE)

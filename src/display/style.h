@@ -5,7 +5,7 @@
 #ifndef STYLE_H
 #define STYLE_H
 
-/* ── ANSI 颜色代码 ── */
+/* ── ANSI color codes ── */
 #define COLOR_RESET  "\033[0m"
 #define COLOR_BOLD   "\033[1m"
 #define COLOR_DIM    "\033[2m"
@@ -17,7 +17,7 @@
 #define COLOR_MAGENTA "\033[35m"
 #define COLOR_BG_BLACK "\033[40m"
 
-/* ── 框线字符 (UTF-8) ── */
+/* ── Box-drawing characters (UTF-8) ── */
 #define HORIZ "─"
 #define VERT  "│"
 #define TL    "┌"
