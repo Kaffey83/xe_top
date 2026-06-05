@@ -39,6 +39,7 @@ typedef struct
     double video_utilization;  /* 视频引擎占用百分比 (0-100) */
     double frequency_mhz;      /* 派生频率 MHz */
     double vram_used_mib;      /* 核显显存占用 (MiB) */
+    bool video_available;      /* 视频解码引擎是否可用 */
 } gpu_metrics_t;
 
 int gpu_monitor_init(void);

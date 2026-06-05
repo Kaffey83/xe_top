@@ -1,0 +1,11 @@
+---
+Checks: >
+  bugprone-*,
+  cert-*,
+  readability-*,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/.*'
+FormatStyle: file
+...

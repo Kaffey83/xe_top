@@ -36,7 +36,7 @@ Full-screen terminal UI similar to `top`, data from Linux PMU / sysfs, consisten
 | Item | Requirement |
 |------|-------------|
 | **CPU** | Intel Core Ultra (200V / 200H / 200U series) |
-| **OS** | Linux kernel ≥ 6.8 (recommended) |
+| **OS** | Linux kernel ≥ 6.18 (Xe GPU driver merged in 6.18) |
 | **Permissions** | Some metrics require `root` (RAPL power, PMU counters) |
 | **Dependencies** | `cmake`, `gcc`/`clang`, `make`, librt, libm (system standard libraries) |
 

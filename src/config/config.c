@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * xe_top - Intel Core Ultra Full-Stack Performance Monitoring Tool
- * 
+ *
  * Copyright (C) 2025
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include "config.h"
+#include "../util/version.h"
+#include "../monitor/paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <errno.h>
+#include <string.h>
 
 void config_parse(int argc, char *argv[], runtime_config_t *cfg)
 {
-    /* Set default values */
     cfg->interval_sec = 1;
     cfg->enable_gpu = true;
     cfg->enable_cpu = true;
@@ -44,22 +42,31 @@ void config_parse(int argc, char *argv[], runtime_config_t *cfg)
         {"no-disk", no_argument, NULL, 'D'},
         {"no-net", no_argument, NULL, 'N'},
         {"no-npu", no_argument, NULL, 'A'},
+        {"version", no_argument, NULL, 'V'},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0}
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "i:GCPhMBDNA", long_opts, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "i:GCPhMBDNAV", long_opts, NULL)) != -1)
     {
         switch (opt)
         {
             case 'i':
-                cfg->interval_sec = atof(optarg); /* Use atof to parse floating point */
-                if (cfg->interval_sec < 0.1)      /* Allow sub-second, but minimum 0.1s (100ms) to prevent lockup */
+            {
+                char *end = NULL;
+                errno = 0;
+                double v = strtod(optarg, &end);
+                if (errno || end == optarg || *end != '\0' || v < INTERVAL_MIN_SEC || v > INTERVAL_MAX_SEC)
                 {
-                    cfg->interval_sec = 0.1;
+                    fprintf(stderr, "Invalid interval: '%s' (valid range: %.1f - %.0f sec)\n",
+                            optarg, INTERVAL_MIN_SEC, INTERVAL_MAX_SEC);
+                    cfg->help_requested = true;
+                    return;
                 }
+                cfg->interval_sec = v;
                 break;
+            }
             case 'G': cfg->enable_gpu = false; break;
             case 'C': cfg->enable_cpu = false; break;
             case 'P': cfg->enable_power = false; break;
@@ -68,6 +75,10 @@ void config_parse(int argc, char *argv[], runtime_config_t *cfg)
             case 'D': cfg->enable_disk = false; break;
             case 'N': cfg->enable_net = false; break;
             case 'A': cfg->enable_npu = false; break;
+            case 'V':
+                printf("xe_top %s\n", XE_TOP_VERSION_STRING);
+                cfg->help_requested = true;
+                return;
             case 'h':
                 cfg->help_requested = true;
                 config_print_usage(argv[0] ? argv[0] : "xe_top");
@@ -82,16 +93,22 @@ void config_parse(int argc, char *argv[], runtime_config_t *cfg)
 
 void config_print_usage(const char *prog_name)
 {
-    printf("用法: %s [选项]\n\n", prog_name);
-    printf("选项:\n");
-    printf("  -i, --interval <秒>  刷新间隔 (默认: 1，支持亚秒级，最小值 0.1)\n");
-    printf("  -G, --no-gpu         禁用 GPU 监控\n");
-    printf("  -C, --no-cpu         禁用 CPU 监控\n");
-    printf("  -P, --no-power       禁用功耗监控\n");
-    printf("  -M, --no-memory      禁用内存监控（带宽 + 容量）\n");
-    printf("  -B, --no-battery     禁用电池监控\n");
-    printf("  -D, --no-disk        禁用磁盘监控\n");
-    printf("  -N, --no-net         禁用网络监控\n");
-    printf("  -A, --no-npu         禁用 NPU 监控\n");
-    printf("  -h, --help           显示此帮助信息\n");
+    printf("Usage: %s [OPTIONS]\n\n", prog_name);
+    printf("Options:\n");
+    printf("  -i, --interval <sec>  Refresh interval (default: 1, range: %.1f-%.0f)\n", INTERVAL_MIN_SEC, INTERVAL_MAX_SEC);
+    printf("  -G, --no-gpu         Disable GPU monitoring\n");
+    printf("  -C, --no-cpu         Disable CPU monitoring\n");
+    printf("  -P, --no-power       Disable power monitoring\n");
+    printf("  -M, --no-memory      Disable memory monitoring (bandwidth + capacity)\n");
+    printf("  -B, --no-battery     Disable battery monitoring\n");
+    printf("  -D, --no-disk        Disable disk monitoring\n");
+    printf("  -N, --no-net         Disable network monitoring\n");
+    printf("  -A, --no-npu         Disable NPU monitoring\n");
+    printf("  -V, --version        Show version number\n");
+    printf("  -h, --help           Show this help message\n");
+    printf("\nInteractive Keys:\n");
+    printf("  q / Esc    Quit\n");
+    printf("  + / -      Adjust refresh interval\n");
+    printf("  p          Pause/resume\n");
+    printf("  h          Show help\n");
 }

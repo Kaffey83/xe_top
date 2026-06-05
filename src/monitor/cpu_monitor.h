@@ -33,7 +33,7 @@ typedef struct
     unsigned long long aperf;          /* 实际性能时钟计数器 */
     unsigned long long mperf;          /* 最大性能时钟计数器 */
     unsigned long long c6_residency;   /* Core C6 驻留时间 */
-    unsigned long long thermal_margin; /* 降频前的热裕度 */
+    long long thermal_margin;          /* 降频前的热裕度 (可为负) */
 } cpu_arch_stats_t;
 
 /* 完整 CPU 状态快照（P-Core + E-Core）*/

@@ -17,6 +17,8 @@
 
 #include "gpu_monitor.h"
 #include "../util/perf_util.h"
+#include "../util/common.h"
+#include "paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -287,12 +289,15 @@ int gpu_monitor_compute(const gpu_stats_t *prev, const gpu_stats_t *cur, double 
         return -1;
     }
 
-    /* 计算增量 */
-    long long delta_active = (long long)(cur->active_ticks - prev->active_ticks);
-    long long delta_total = (long long)(cur->total_ticks - prev->total_ticks);
-    long long delta_video_active = (long long)(cur->video_active_ticks - prev->video_active_ticks);
-    long long delta_video_total = (long long)(cur->video_total_ticks - prev->video_total_ticks);
-    long long delta_freq = (long long)(cur->freq_accumulator - prev->freq_accumulator);
+    /* 计算增量 (DELTA_SAFE protects against counter wrap-around) */
+    long long delta_active = DELTA_SAFE(cur->active_ticks, prev->active_ticks);
+    long long delta_total = DELTA_SAFE(cur->total_ticks, prev->total_ticks);
+    long long delta_video_active = DELTA_SAFE(cur->video_active_ticks, prev->video_active_ticks);
+    long long delta_video_total = DELTA_SAFE(cur->video_total_ticks, prev->video_total_ticks);
+    long long delta_freq = DELTA_SAFE(cur->freq_accumulator, prev->freq_accumulator);
+
+    /* 标记视频引擎是否可用 */
+    out->video_available = (fd_video_active >= 0 && fd_video_total >= 0);
 
     /* --- 渲染引擎利用率 --- */
     if (delta_total > 0 && prev->total_ticks > 0)

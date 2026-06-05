@@ -26,6 +26,8 @@
 #include "monitor/net_monitor.h"
 #include "monitor/npu_monitor.h"
 #include "display/display.h"
+#include "util/version.h"
+#include "monitor/paths.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +39,7 @@
 #include <errno.h>
 
 static volatile sig_atomic_t running = 1;
+static volatile sig_atomic_t paused = 0;
 
 /* Handle exit signals uniformly to ensure terminal state is restored */
 static void handle_signal(int sig)
@@ -53,14 +56,66 @@ static void setup_signals(void)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
 
-    /* Catch interrupt (Ctrl+C), termination, and hangup (terminal close) signals */
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
 }
 
+/* Process a single keypress; returns 1 if should quit, 0 otherwise */
+static int process_key(char key, runtime_config_t *cfg)
+{
+    switch (key)
+    {
+        case 'q':
+        case 'Q':
+            return 1;
+        case 27: /* ESC */
+            return 1;
+        case '+':
+        case '=':
+            if (cfg->interval_sec > INTERVAL_MIN_SEC)
+            {
+                cfg->interval_sec -= 0.1;
+                if (cfg->interval_sec < INTERVAL_MIN_SEC)
+                    cfg->interval_sec = INTERVAL_MIN_SEC;
+            }
+            break;
+        case '-':
+        case '_':
+            if (cfg->interval_sec < INTERVAL_MAX_SEC)
+            {
+                cfg->interval_sec += 0.1;
+                if (cfg->interval_sec > INTERVAL_MAX_SEC)
+                    cfg->interval_sec = INTERVAL_MAX_SEC;
+            }
+            break;
+        case 'p':
+        case 'P':
+            paused = !paused;
+            break;
+        case 'h':
+        case 'H':
+            display_toggle_help();
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
+    /* --- Check if stdout is a terminal --- */
+    if (!isatty(STDOUT_FILENO))
+    {
+        fprintf(stderr, "Error: xe_top must be run in a terminal (stdout is not a tty)\n");
+        return 1;
+    }
+
+    /* --- Redirect stderr to /dev/null to avoid TUI corruption --- */
+    FILE *devnull = freopen("/dev/null", "w", stderr);
+    (void)devnull;
+
     /* --- Parse configuration --- */
     runtime_config_t cfg;
     config_parse(argc, argv, &cfg);
@@ -82,8 +137,10 @@ int main(int argc, char *argv[])
 
     if (!gpu_ok && !cpu_ok && !pwr_ok && !mem_ok && !bat_ok && !dsk_ok && !net_ok && !npu_ok)
     {
-        fprintf(stderr, "All monitoring module initialization failed, exiting.\n");
-        goto cleanup; /* Jump to cleanup to avoid resource leaks */
+        /* Restore stderr for the error message */
+        freopen("/dev/tty", "w", stderr);
+        fprintf(stderr, "All monitor initialization failed, exiting.\n");
+        goto cleanup;
     }
 
     /* --- Initialize fullscreen display and signal handling --- */
@@ -111,20 +168,37 @@ int main(int argc, char *argv[])
     /* --- Main loop --- */
     while (running)
     {
-        /* Non-blocking read and discard of accidental user input */
-        char discard_buf[64];
+        /* Non-blocking read and process keypresses */
+        char key_buf[64];
         ssize_t n_read;
         do {
-            n_read = read(STDIN_FILENO, discard_buf, sizeof(discard_buf));
+            n_read = read(STDIN_FILENO, key_buf, sizeof(key_buf));
+            if (n_read > 0)
+            {
+                for (ssize_t i = 0; i < n_read; i++)
+                {
+                    if (process_key(key_buf[i], &cfg))
+                    {
+                        running = 0;
+                        goto loop_exit;
+                    }
+                }
+            }
         } while (n_read > 0 || (n_read < 0 && errno == EINTR));
 
-        /* Sub-second sleep (compatible with int and double interval_sec) */
+        /* Sub-second sleep */
         double interval = (double)cfg.interval_sec;
         struct timespec req = {
             .tv_sec = (time_t)interval,
             .tv_nsec = (long)((interval - (time_t)interval) * 1e9)
         };
         nanosleep(&req, NULL);
+
+        /* Skip sampling if paused */
+        if (paused)
+        {
+            continue;
+        }
 
         /* Read current sample values */
         gpu_stats_t cur_gpu = {0};
@@ -188,7 +262,7 @@ int main(int argc, char *argv[])
         ts_start = ts_end;
     }
 
-cleanup:
+loop_exit:
     /* --- Cleanup --- */
     display_cleanup();
     if (gpu_ok) gpu_monitor_cleanup();
@@ -201,4 +275,16 @@ cleanup:
     if (npu_ok) npu_monitor_cleanup();
 
     return 0;
+
+cleanup:
+    if (gpu_ok) gpu_monitor_cleanup();
+    if (cpu_ok) cpu_monitor_cleanup();
+    if (pwr_ok) power_monitor_cleanup();
+    if (mem_ok) mem_monitor_cleanup();
+    if (bat_ok) battery_monitor_cleanup();
+    if (dsk_ok) disk_monitor_cleanup();
+    if (net_ok) net_monitor_cleanup();
+    if (npu_ok) npu_monitor_cleanup();
+
+    return 1;
 }

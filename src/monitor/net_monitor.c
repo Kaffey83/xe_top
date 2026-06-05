@@ -16,15 +16,18 @@
 
 
 #include "net_monitor.h"
+#include "../util/common.h"
+#include "paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-#define SYS_NET_PATH "/sys/class/net"
-
-static char rx_path[512] = {0};
-static char tx_path[512] = {0};
+/* Cached file descriptors for net stats (opened once in init) */
+static int fd_rx = -1;
+static int fd_tx = -1;
 
 /* 动态查找活跃的物理网卡 (跳过 lo) */
 static int find_active_net(void)
@@ -35,7 +38,10 @@ static int find_active_net(void)
         return -1;
     }
 
+    char rx_path[512] = {0};
+    char tx_path[512] = {0};
     struct dirent *entry;
+
     while ((entry = readdir(dir)) != NULL)
     {
         /* 跳过自身、上级目录和回环接口 */
@@ -61,7 +67,10 @@ static int find_active_net(void)
                     snprintf(tx_path, sizeof(tx_path), "%s/%s/statistics/tx_bytes", SYS_NET_PATH, entry->d_name);
                     fclose(f);
                     closedir(dir);
-                    return 0;
+
+                    fd_rx = open(rx_path, O_RDONLY);
+                    fd_tx = open(tx_path, O_RDONLY);
+                    return (fd_rx >= 0 && fd_tx >= 0) ? 0 : -1;
                 }
             }
             fclose(f);
@@ -82,26 +91,24 @@ int net_monitor_init(void)
 
 int net_monitor_read(net_stats_t *stats)
 {
-    if (!stats || rx_path[0] == '\0')
+    if (!stats || fd_rx < 0 || fd_tx < 0)
     {
         return -1;
     }
 
-    FILE *f_rx = fopen(rx_path, "r");
-    FILE *f_tx = fopen(tx_path, "r");
-    
-    if (!f_rx || !f_tx)
-    {
-        if (f_rx) fclose(f_rx);
-        if (f_tx) fclose(f_tx);
-        return -1;
-    }
+    /* Read using pread to avoid open/close each cycle */
+    char buf[64];
 
-    if (fscanf(f_rx, "%llu", &stats->rx_bytes) != 1) stats->rx_bytes = 0;
-    if (fscanf(f_tx, "%llu", &stats->tx_bytes) != 1) stats->tx_bytes = 0;
+    ssize_t n = pread(fd_rx, buf, sizeof(buf) - 1, 0);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    if (sscanf(buf, "%llu", &stats->rx_bytes) != 1) stats->rx_bytes = 0;
 
-    fclose(f_rx);
-    fclose(f_tx);
+    n = pread(fd_tx, buf, sizeof(buf) - 1, 0);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    if (sscanf(buf, "%llu", &stats->tx_bytes) != 1) stats->tx_bytes = 0;
+
     return 0;
 }
 
@@ -112,8 +119,8 @@ int net_monitor_compute(const net_stats_t *prev, const net_stats_t *cur, double 
         return -1;
     }
 
-    double delta_rx = (double)(cur->rx_bytes - prev->rx_bytes);
-    double delta_tx = (double)(cur->tx_bytes - prev->tx_bytes);
+    double delta_rx = (double)DELTA_SAFE(cur->rx_bytes, prev->rx_bytes);
+    double delta_tx = (double)DELTA_SAFE(cur->tx_bytes, prev->tx_bytes);
 
     out->rx_mib_s = (delta_rx / (1024.0 * 1024.0)) / elapsed_sec;
     out->tx_mib_s = (delta_tx / (1024.0 * 1024.0)) / elapsed_sec;
@@ -122,5 +129,7 @@ int net_monitor_compute(const net_stats_t *prev, const net_stats_t *cur, double 
 
 void net_monitor_cleanup(void)
 {
-    /* 无需清理 */
+    if (fd_rx >= 0) close(fd_rx);
+    if (fd_tx >= 0) close(fd_tx);
+    fd_rx = fd_tx = -1;
 }

@@ -17,6 +17,8 @@
 
 #include "cpu_monitor.h"
 #include "../util/perf_util.h"
+#include "../util/common.h"
+#include "paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,7 +55,7 @@ static int fd_thermal = -1;
 
 static void read_tsc_freq(void)
 {
-    FILE *f = fopen("/sys/devices/system/cpu/cpu0/tsc_freq_khz", "r");
+    FILE *f = fopen(TSC_FREQ_PATH, "r");
     if (!f)
     {
         return;
@@ -250,16 +252,16 @@ int cpu_monitor_read(cpu_stats_t *stats)
     read_arch_stats(fd_e_inst, fd_e_cyc, fd_e_ref, fd_e_cache_ref, fd_e_cache_miss,
                     fd_e_br_instr, fd_e_br_miss, fd_e_aperf, fd_e_mperf, -1, &stats->ecore);
 
-    /* 读取热裕度 */
+    /* 读取热裕度 (signed value from MSR) */
     if (fd_thermal >= 0)
     {
         long long val = 0;
         if (read(fd_thermal, &val, sizeof(val)) != sizeof(val)) val = 0;
-        stats->pcore.thermal_margin = (unsigned long long)val;
+        stats->pcore.thermal_margin = val;
     }
     else
     {
-        stats->pcore.thermal_margin = 0;
+        stats->pcore.thermal_margin = -1;
     }
 
     /* 读取 Package C10 */
@@ -280,21 +282,21 @@ int cpu_monitor_compute(const cpu_stats_t *prev, const cpu_stats_t *cur, cpu_met
         return -1;
     }
 
-    /* P-Core 增量 */
-    long long p_delta_inst = (long long)(cur->pcore.instructions - prev->pcore.instructions);
-    long long p_delta_cyc = (long long)(cur->pcore.cycles - prev->pcore.cycles);
-    long long p_delta_aperf = (long long)(cur->pcore.aperf - prev->pcore.aperf);
-    long long p_delta_mperf = (long long)(cur->pcore.mperf - prev->pcore.mperf);
-    long long p_delta_c6 = (long long)(cur->pcore.c6_residency - prev->pcore.c6_residency);
+    /* P-Core 增量 (DELTA_SAFE protects against counter wrap-around) */
+    long long p_delta_inst = DELTA_SAFE(cur->pcore.instructions, prev->pcore.instructions);
+    long long p_delta_cyc = DELTA_SAFE(cur->pcore.cycles, prev->pcore.cycles);
+    long long p_delta_aperf = DELTA_SAFE(cur->pcore.aperf, prev->pcore.aperf);
+    long long p_delta_mperf = DELTA_SAFE(cur->pcore.mperf, prev->pcore.mperf);
+    long long p_delta_c6 = DELTA_SAFE(cur->pcore.c6_residency, prev->pcore.c6_residency);
 
     /* E-Core 增量 */
-    long long e_delta_inst = (long long)(cur->ecore.instructions - prev->ecore.instructions);
-    long long e_delta_cyc = (long long)(cur->ecore.cycles - prev->ecore.cycles);
-    long long e_delta_aperf = (long long)(cur->ecore.aperf - prev->ecore.aperf);
-    long long e_delta_mperf = (long long)(cur->ecore.mperf - prev->ecore.mperf);
+    long long e_delta_inst = DELTA_SAFE(cur->ecore.instructions, prev->ecore.instructions);
+    long long e_delta_cyc = DELTA_SAFE(cur->ecore.cycles, prev->ecore.cycles);
+    long long e_delta_aperf = DELTA_SAFE(cur->ecore.aperf, prev->ecore.aperf);
+    long long e_delta_mperf = DELTA_SAFE(cur->ecore.mperf, prev->ecore.mperf);
 
     /* Package C10 增量 */
-    long long delta_c10 = (long long)(cur->pkg_c10_residency - prev->pkg_c10_residency);
+    long long delta_c10 = DELTA_SAFE(cur->pkg_c10_residency, prev->pkg_c10_residency);
 
     /* --- P-Core 频率 --- */
     if (p_delta_mperf > 0 && prev->pcore.mperf > 0)

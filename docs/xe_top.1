@@ -1,0 +1,90 @@
+.\" SPDX-License-Identifier: GPL-2.0
+.TH XE_TOP 1 "2025-06-05" "xe_top 0.1.0" "User Commands"
+.SH NAME
+xe_top \- Intel Core Ultra full-stack performance monitoring tool
+.SH SYNOPSIS
+.B xe_top
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+.B xe_top
+is a TUI performance monitoring tool for Intel Core Ultra (200V/H/U) processors
+on Linux. It provides real-time monitoring of CPU (P-Core/E-Core), Xe Graphics,
+NPU, memory bandwidth, power consumption, battery, disk I/O, and network I/O
+using Linux PMU (perf_event_open), Uncore IMC, ACPI/RAPL sysfs, and NPU sysfs.
+.PP
+Most features require root privileges (sudo) to access PMU and RAPL interfaces.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-interval " " \fISECONDS\fR
+Refresh interval in seconds (default: 1, range: 0.1\-60).
+Supports sub-second intervals for high-frequency monitoring.
+.TP
+.BR \-G ", " \-\-no-gpu
+Disable GPU (Xe Graphics) monitoring.
+.TP
+.BR \-C ", " \-\-no-cpu
+Disable CPU (P-Core/E-Core) monitoring.
+.TP
+.BR \-P ", " \-\-no-power
+Disable power (RAPL) monitoring.
+.TP
+.BR \-M ", " \-\-no-memory
+Disable memory (IMC bandwidth + capacity) monitoring.
+.TP
+.BR \-B ", " \-\-no-battery
+Disable battery monitoring.
+.TP
+.BR \-D ", " \-\-no-disk
+Disable disk I/O monitoring.
+.TP
+.BR \-N ", " \-\-no-net
+Disable network I/O monitoring.
+.TP
+.BR \-A ", " \-\-no-npu
+Disable NPU (AI engine) monitoring.
+.TP
+.BR \-V ", " \-\-version
+Print version number and exit.
+.TP
+.BR \-h ", " \-\-help
+Print usage information and exit.
+.SH "INTERACTIVE KEYS"
+.TP
+.B q " / " Esc
+Quit the application.
+.TP
+.B + " / " \-
+Increase/decrease refresh interval by 0.1 seconds.
+.TP
+.B p
+Toggle pause/resume of data collection.
+.TP
+.B h
+Show help information.
+.SH REQUIREMENTS
+.IP \(bu 4
+Linux kernel 6.18+ with Xe driver PMU support for Intel Core Ultra
+(Xe GPU driver was merged into mainline kernel in 6.18)
+.IP \(bu 4
+Root privileges (sudo) for PMU and RAPL access
+.IP \(bu 4
+Terminal with UTF-8 support for box-drawing characters
+.SH EXAMPLES
+.TP
+Run with default settings:
+sudo xe_top
+.TP
+Run with 0.5s refresh:
+sudo xe_top \-\-interval 0.5
+.TP
+Disable NPU and battery:
+sudo xe_top \-\-no-npu \-\-no-battery
+.SH AUTHOR
+xe_top developers
+.SH LICENSE
+GPL-2.0
+.SH "SEE ALSO"
+.BR top (1),
+.BR htop (1),
+.BR btop (1),
+.BR perf (1)

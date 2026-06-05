@@ -16,25 +16,71 @@
 
 
 #include "npu_monitor.h"
+#include "../util/common.h"
+#include "paths.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-#define NPU_DEV_PATH "/sys/class/accel/accel0/device"
+/* Cached file descriptors for NPU sysfs (opened once in init) */
+static int fd_busy = -1;
+static int fd_freq = -1;
+static int fd_max_freq = -1;
+static int fd_mem = -1;
 
 static int npu_available = 0;
+/* Track whether frequency info is available from driver */
+static int npu_freq_available = 0;
+
+/* Read an unsigned long long from a persistent fd using pread */
+static int pread_ull(int fd, unsigned long long *out)
+{
+    if (fd < 0 || !out) return -1;
+    char buf[32];
+    ssize_t n = pread(fd, buf, sizeof(buf) - 1, 0);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    return (sscanf(buf, "%llu", out) == 1) ? 0 : -1;
+}
+
+/* Read an unsigned int from a persistent fd using pread */
+static int pread_uint(int fd, unsigned int *out)
+{
+    if (fd < 0 || !out) return -1;
+    char buf[32];
+    ssize_t n = pread(fd, buf, sizeof(buf) - 1, 0);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    return (sscanf(buf, "%u", out) == 1) ? 0 : -1;
+}
 
 int npu_monitor_init(void)
 {
-    /* 检查核心文件是否可读，判断 NPU 驱动是否加载 */
     char path[256];
+
+    /* Open busy time fd (required) */
     snprintf(path, sizeof(path), "%s/npu_busy_time_us", NPU_DEV_PATH);
-    FILE *f = fopen(path, "r");
-    if (!f)
+    fd_busy = open(path, O_RDONLY);
+    if (fd_busy < 0)
     {
         npu_available = 0;
         return -1;
     }
-    fclose(f);
+
+    /* Open frequency fds (optional - driver may not support) */
+    snprintf(path, sizeof(path), "%s/npu_current_frequency_mhz", NPU_DEV_PATH);
+    fd_freq = open(path, O_RDONLY);
+
+    snprintf(path, sizeof(path), "%s/npu_max_frequency_mhz", NPU_DEV_PATH);
+    fd_max_freq = open(path, O_RDONLY);
+
+    npu_freq_available = (fd_freq >= 0 && fd_max_freq >= 0);
+
+    /* Open memory utilization fd (optional) */
+    snprintf(path, sizeof(path), "%s/npu_memory_utilization", NPU_DEV_PATH);
+    fd_mem = open(path, O_RDONLY);
+
     npu_available = 1;
     return 0;
 }
@@ -46,52 +92,30 @@ int npu_monitor_read(npu_stats_t *stats)
         return -1;
     }
 
-    char path[256];
-    FILE *f;
+    /* Read busy time (required) */
+    if (pread_ull(fd_busy, &stats->busy_time_us) < 0) return -1;
 
-    /* 读取累计忙碌时间 (微秒) */
-    snprintf(path, sizeof(path), "%s/npu_busy_time_us", NPU_DEV_PATH);
-    f = fopen(path, "r");
-    if (!f) return -1;
-    if (fscanf(f, "%llu", &stats->busy_time_us) != 1)
+    /* Read frequency (optional, graceful degradation) */
+    if (npu_freq_available)
     {
-        fclose(f);
-        return -1;
+        if (pread_uint(fd_freq, &stats->freq_mhz) < 0) stats->freq_mhz = 0;
+        if (pread_uint(fd_max_freq, &stats->max_freq_mhz) < 0) stats->max_freq_mhz = 0;
     }
-    fclose(f);
+    else
+    {
+        stats->freq_mhz = 0;
+        stats->max_freq_mhz = 0;
+    }
 
-    /* 读取当前频率 */
-    snprintf(path, sizeof(path), "%s/npu_current_frequency_mhz", NPU_DEV_PATH);
-    f = fopen(path, "r");
-    if (!f) return -1;
-    if (fscanf(f, "%u", &stats->freq_mhz) != 1)
+    /* Read memory utilization (optional) */
+    if (fd_mem >= 0)
     {
-        fclose(f);
-        return -1;
+        if (pread_ull(fd_mem, &stats->mem_bytes) < 0) stats->mem_bytes = 0;
     }
-    fclose(f);
-
-    /* 读取最大频率 */
-    snprintf(path, sizeof(path), "%s/npu_max_frequency_mhz", NPU_DEV_PATH);
-    f = fopen(path, "r");
-    if (!f) return -1;
-    if (fscanf(f, "%u", &stats->max_freq_mhz) != 1)
+    else
     {
-        fclose(f);
-        return -1;
+        stats->mem_bytes = 0;
     }
-    fclose(f);
-
-    /* 读取显存占用 (字节) */
-    snprintf(path, sizeof(path), "%s/npu_memory_utilization", NPU_DEV_PATH);
-    f = fopen(path, "r");
-    if (!f) return -1;
-    if (fscanf(f, "%llu", &stats->mem_bytes) != 1)
-    {
-        fclose(f);
-        return -1;
-    }
-    fclose(f);
 
     return 0;
 }
@@ -104,10 +128,7 @@ int npu_monitor_compute(const npu_stats_t *prev, const npu_stats_t *cur, double 
     }
 
     /* 计算占用率: (忙碌时间差 / 总流逝时间) * 100% */
-    long long delta_busy = (long long)(cur->busy_time_us - prev->busy_time_us);
-    
-    /* 防御无符号减法下溢 */
-    if (delta_busy < 0) delta_busy = 0;
+    long long delta_busy = DELTA_SAFE(cur->busy_time_us, prev->busy_time_us);
 
     double total_elapsed_us = elapsed_sec * 1000000.0;
     out->utilization_pct = (delta_busy / total_elapsed_us) * 100.0;
@@ -126,5 +147,11 @@ int npu_monitor_compute(const npu_stats_t *prev, const npu_stats_t *cur, double 
 
 void npu_monitor_cleanup(void)
 {
-    /* 无需清理 */
+    if (fd_busy >= 0) close(fd_busy);
+    if (fd_freq >= 0) close(fd_freq);
+    if (fd_max_freq >= 0) close(fd_max_freq);
+    if (fd_mem >= 0) close(fd_mem);
+    fd_busy = fd_freq = fd_max_freq = fd_mem = -1;
+    npu_available = 0;
+    npu_freq_available = 0;
 }

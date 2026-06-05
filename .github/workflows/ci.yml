@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-25.10
+    strategy:
+      matrix:
+        cc: [gcc-14, gcc-15, clang-18, clang-19, clang-20]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cc }} linux-perf-6.18.0
+
+      - name: Configure
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_C_COMPILER=${{ matrix.cc }}
+
+      - name: Build
+        run: cd build && make -j$(nproc)
+
+      - name: Run tests
+        run: |
+          cd build
+          ./test_common
+          ./test_ring
+
+  build-default:
+    runs-on: ubuntu-25.10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-perf-6.18.0
+
+      - name: Configure with ASan
+        run: mkdir build && cd build && cmake .. -DENABLE_ASAN=ON
+
+      - name: Build
+        run: cd build && make -j$(nproc) 2>&1 | head -50

@@ -126,7 +126,7 @@ int mem_monitor_init(void)
     int type1 = perf_util_get_pmu_type(imc1_name);
     if (type0 == -1 || type1 == -1)
     {
-        fprintf(stderr, "内存: 无法获取 IMC PMU 类型\n");
+        fprintf(stderr, "Memory: failed to get IMC PMU type\n");
         return -1;
     }
 
@@ -135,7 +135,7 @@ int mem_monitor_init(void)
     unsigned long long code_w = build_imc_config(imc0_path, "data_write");
     if (!code_r || !code_w)
     {
-        fprintf(stderr, "内存: 无法构建 IMC 事件 config (code_r=%llx, code_w=%llx)\n", code_r, code_w);
+        fprintf(stderr, "Memory: failed to build IMC event config (code_r=%llx, code_w=%llx)\n", code_r, code_w);
         return -1;
     }
 
@@ -155,19 +155,20 @@ int mem_monitor_init(void)
 
     if (fd_imc0_r == -1 || fd_imc0_w == -1 || fd_imc1_r == -1 || fd_imc1_w == -1)
     {
-        fprintf(stderr, "内存: perf_event_open 失败\n");
+        fprintf(stderr, "Memory: perf_event_open failed\n");
         mem_monitor_cleanup();
         return -1;
     }
 
-    unsigned long long dummy;
-    ssize_t r0 = read(fd_imc0_r, &dummy, sizeof(dummy));
-    ssize_t r1 = read(fd_imc0_w, &dummy, sizeof(dummy));
-    ssize_t r2 = read(fd_imc1_r, &dummy, sizeof(dummy));
-    ssize_t r3 = read(fd_imc1_w, &dummy, sizeof(dummy));
-    (void)r0; (void)r1; (void)r2; (void)r3;
-    prev_raw_r = 0;
-    prev_raw_w = 0;
+    /* Read initial counter values to seed prev_raw_* so the first
+     * compute cycle produces correct deltas instead of zero. */
+    unsigned long long init_r0, init_w0, init_r1, init_w1;
+    if (read(fd_imc0_r, &init_r0, sizeof(init_r0)) != sizeof(init_r0)) init_r0 = 0;
+    if (read(fd_imc0_w, &init_w0, sizeof(init_w0)) != sizeof(init_w0)) init_w0 = 0;
+    if (read(fd_imc1_r, &init_r1, sizeof(init_r1)) != sizeof(init_r1)) init_r1 = 0;
+    if (read(fd_imc1_w, &init_w1, sizeof(init_w1)) != sizeof(init_w1)) init_w1 = 0;
+    prev_raw_r = init_r0 + init_r1;
+    prev_raw_w = init_w0 + init_w1;
 
     return 0;
 }
