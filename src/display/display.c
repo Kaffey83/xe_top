@@ -323,7 +323,7 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
     cur_row += cpu_h + 1;
 
     /* GPU & NPU panel */
-    int gpu_h = 8;
+    int gpu_h = 9;
     draw_panel(cur_row, gpu_h, w, "Xe Graphics & NPU");
     if (gpu)
     {
@@ -406,7 +406,7 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
     cur_row += gpu_h + 1;
 
     /* SOC panel (Memory + Power + Battery) */
-    int soc_h = 8;
+    int soc_h = 7;
     draw_panel(cur_row, soc_h, w, "SOC (Memory & Power & Battery)");
     if (mem_cap || mem || power || battery)
     {
@@ -475,19 +475,19 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
             gotoxy(cur_row + row_off, 3);
             fputs(COLOR_CYAN, stdout);
 
-            const char *status_text = "Unknown";
+            const char *status_text = "Unknown    ";
             if (battery->status == BATTERY_STATUS_CHARGING)
-                status_text = "Charging";
+                status_text = "Charging   ";
             else if (battery->status == BATTERY_STATUS_DISCHARGING)
                 status_text = "Discharging";
             else if (battery->status == BATTERY_STATUS_FULL)
-                status_text = "Full";
+                status_text = "Full       ";
 
             snprintf(buf, sizeof(buf), "BAT %s %3d%% %5.2fW", status_text, battery->capacity, battery->watts);
             fputs(buf, stdout);
             fputs(COLOR_RESET, stdout);
 
-            gotoxy(cur_row + row_off, 50);
+            gotoxy(cur_row + row_off, 35);
             draw_bar((float)battery->capacity, 20);
             fputs(COLOR_RESET "\033[K", stdout);
         }
@@ -529,7 +529,7 @@ void display_render(const gpu_metrics_t *gpu, const cpu_metrics_t *cpu, const me
             fputs(COLOR_RESET, stdout);
             gotoxy(cur_row + row_off, 35);
             fputs(COLOR_GREEN, stdout);
-            snprintf(buf, sizeof(buf), "Up: %7.2f MiB/s", net->tx_mib_s);
+            snprintf(buf, sizeof(buf), "Upon:  %7.2f MiB/s", net->tx_mib_s);
             fputs(buf, stdout);
             fputs(COLOR_RESET "\033[K", stdout);
             row_off++;
