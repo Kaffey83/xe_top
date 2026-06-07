@@ -69,8 +69,11 @@ static int process_key(char key, runtime_config_t *cfg)
         case 'q':
         case 'Q':
             return 1;
-        case 27: /* ESC */
-            return 1;
+        /* NOTE: ESC (0x1B) is intentionally NOT handled here.
+         * In raw mode it is the leading byte of every ANSI escape
+         * sequence (mouse wheel, arrow keys, F1-F4, ...), and treating
+         * a bare ESC as "quit" makes the program exit on any such
+         * event. ESC sequences are consumed by the main loop instead. */
         case '+':
         case '=':
             if (cfg->interval_sec > INTERVAL_MIN_SEC)
@@ -137,8 +140,13 @@ int main(int argc, char *argv[])
 
     if (!gpu_ok && !cpu_ok && !pwr_ok && !mem_ok && !bat_ok && !dsk_ok && !net_ok && !npu_ok)
     {
-        /* Restore stderr for the error message */
-        freopen("/dev/tty", "w", stderr);
+        /* Restore stderr for the error message.
+         * Note: under GCC >= 14, a plain (void) cast no longer
+         * satisfies warn_unused_result; we must actually consume
+         * the return value. */
+        if (freopen("/dev/tty", "w", stderr) == NULL) {
+            /* Nothing useful to do; just fall through. */
+        }
         fprintf(stderr, "All monitor initialization failed, exiting.\n");
         goto cleanup;
     }
@@ -168,16 +176,67 @@ int main(int argc, char *argv[])
     /* --- Main loop --- */
     while (running)
     {
-        /* Non-blocking read and process keypresses */
+        /* Non-blocking read and process keypresses.
+         *
+         * The terminal is in raw mode (ICANON off, VMIN=0, VTIME=0),
+         * so read() returns every byte immediately. Many "non-key"
+         * events such as a mouse-wheel scroll, arrow keys, F1-F4,
+         * Shift+Tab, etc. arrive as ANSI escape sequences whose first
+         * byte is ESC (0x1B). We must NOT treat a bare ESC as the
+         * "quit" key, or the program will exit on any such event.
+         *
+         * We implement a tiny state machine that, once it has seen an
+         * ESC, swallows the rest of the sequence (parameter bytes,
+         * intermediate bytes, and the final byte) before normal key
+         * handling resumes. A second ESC starts a new sequence. */
         char key_buf[64];
         ssize_t n_read;
+        int esc_pending = 0; /* 0 = normal, 1 = inside an ESC sequence */
         do {
             n_read = read(STDIN_FILENO, key_buf, sizeof(key_buf));
             if (n_read > 0)
             {
                 for (ssize_t i = 0; i < n_read; i++)
                 {
-                    if (process_key(key_buf[i], &cfg))
+                    unsigned char c = (unsigned char)key_buf[i];
+
+                    if (esc_pending)
+                    {
+                        /* Inside an escape sequence: keep consuming
+                         * parameter / intermediate bytes. */
+                        if (c == 0x1B) {
+                            /* A second ESC starts a brand new
+                             * sequence; the previous one is dropped. */
+                            esc_pending = 1;
+                            continue;
+                        }
+                        if (c == ';' || c == ':' || c == ',' ||
+                            (c >= '0' && c <= '9') ||
+                            c == '<' || c == '>' || c == '?' ||
+                            (c >= ' ' && c <= '/')) {
+                            /* CSI/SS3 parameter and intermediate bytes
+                             * (0x20-0x2F). Keep consuming. */
+                            continue;
+                        }
+                        /* Any other byte terminates the sequence.
+                         * Drop it (do NOT forward to process_key) and
+                         * return to normal mode. */
+                        esc_pending = 0;
+                        continue;
+                    }
+
+                    if (c == 0x1B) {
+                        /* Start of a possible escape sequence.
+                         * Defer the decision: the next byte tells us
+                         * whether it is a real sequence to swallow or
+                         * just a stray ESC we previously decided to
+                         * ignore. process_key() is never called with
+                         * 0x1B, so an ESC can no longer quit. */
+                        esc_pending = 1;
+                        continue;
+                    }
+
+                    if (process_key((char)c, &cfg))
                     {
                         running = 0;
                         goto loop_exit;
